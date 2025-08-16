@@ -45,7 +45,7 @@ public class Program
 	
 	// queries
 	static int[] sQ, tQ, ansQ;
-	static int[] globalQueryIndexBuf; // scratch buffer for bucketing queries
+	static int[] bufA, bufB; // alternating buffers for query indices
 
 	public static void Main()
 	{
@@ -93,18 +93,18 @@ public class Program
 		qbuf = new int[n + 5];
 		assignStamp = new int[n + 1]; assignId = new int[n + 1];
 		visitT = new int[n + 1];
-		globalQueryIndexBuf = new int[Math.Max(1, q)];
+		bufA = new int[Math.Max(1, q)]; bufB = new int[Math.Max(1, q)];
 
-		// seed queries array 0..q-1
-		for (int i = 0; i < q; i++) globalQueryIndexBuf[i] = i;
-		DecomposeArray(3, globalQueryIndexBuf, 0, q);
+		// seed queries array 0..q-1 into bufA
+		for (int i = 0; i < q; i++) bufA[i] = i;
+		DecomposeArray(3, bufA, 0, q, bufB);
 
 		var sb = new StringBuilder();
 		for (int i = 0; i < q; i++) sb.AppendLine(ansQ[i].ToString());
 		Console.Write(sb.ToString());
 	}
 
-	static void DecomposeArray(int startT, int[] queries, int qStart, int qLen)
+	static void DecomposeArray(int startT, int[] src, int qStart, int qLen, int[] dst)
 	{
 		if (qLen == 0) return;
 		// collect component triangles via stack ignoring removed
@@ -151,7 +151,7 @@ public class Program
 		// process queries crossing via centroid (constant-time per query)
 		for (int ii = 0; ii < qLen; ii++)
 		{
-			int id = queries[qStart + ii]; if (ansQ[id] == 0) continue; int s = sQ[id], t = tQ[id];
+			int id = src[qStart + ii]; if (ansQ[id] == 0) continue; int s = sQ[id], t = tQ[id];
 			if (compMarkV[s] != compStampV || compMarkV[t] != compStampV) continue;
 			int bestAns = ansQ[id];
 			int a = (vis0[s] == stamp0 && vis0[t] == stamp0) ? dist0[s] + dist0[t] : int.MaxValue;
@@ -196,14 +196,14 @@ public class Program
 			}
 		}
 
-		// bucket queries for children in a single pass using contiguous buffer
+		// bucket queries for children in a single pass into dst
 		int m = childRoots.Length;
 		if (m > 0)
 		{
 			int[] cnt = new int[m];
 			for (int ii = 0; ii < qLen; ii++)
 			{
-				int id = queries[qStart + ii]; if (ansQ[id] == 0) continue; int s = sQ[id], t = tQ[id];
+				int id = src[qStart + ii]; if (ansQ[id] == 0) continue; int s = sQ[id], t = tQ[id];
 				if (assignStamp[s] == assignStampCur && assignStamp[t] == assignStampCur)
 				{
 					int isid = assignId[s]; if (isid == assignId[t]) cnt[isid - 1]++;
@@ -211,16 +211,16 @@ public class Program
 			}
 			int[] start = new int[m]; int[] posArr = new int[m];
 			int totalCnt = 0; for (int i = 0; i < m; i++) { start[i] = totalCnt; posArr[i] = totalCnt; totalCnt += cnt[i]; }
-			if (globalQueryIndexBuf.Length < totalCnt) globalQueryIndexBuf = new int[Math.Max(globalQueryIndexBuf.Length * 2, totalCnt)];
+			if (dst.Length < totalCnt) dst = new int[totalCnt]; // local replacement OK; reassigning local ref only
 			for (int ii = 0; ii < qLen; ii++)
 			{
-				int id = queries[qStart + ii]; if (ansQ[id] == 0) continue; int s = sQ[id], t = tQ[id];
+				int id = src[qStart + ii]; if (ansQ[id] == 0) continue; int s = sQ[id], t = tQ[id];
 				if (assignStamp[s] == assignStampCur && assignStamp[t] == assignStampCur)
 				{
 					int isid = assignId[s], itid = assignId[t]; if (isid == itid)
 					{
 						int p = posArr[isid - 1]++;
-						globalQueryIndexBuf[p] = id;
+						dst[p] = id;
 					}
 				}
 			}
@@ -228,7 +228,8 @@ public class Program
 			{
 				int lenChild = cnt[i]; if (lenChild == 0) continue;
 				int startIdx = start[i];
-				DecomposeArray(childRoots[i], globalQueryIndexBuf, startIdx, lenChild);
+				// swap roles: child's dst is src buffer
+				DecomposeArray(childRoots[i], dst, startIdx, lenChild, src);
 			}
 		}
 	}
