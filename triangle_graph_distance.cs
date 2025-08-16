@@ -50,7 +50,7 @@ public class Program
 		var fs = new FastScanner(Console.OpenStandardInput());
 		n = fs.NextInt();
 		headG = new int[n + 5]; Array.Fill(headG, -1);
-		toG = new int[(n - 1 + 3) * 2 + 10]; // each new node adds 2 edges; initial 3 edges
+		toG = new int[4 * n + 10]; // total directed edges = 2*(2n-3) <= 4n-6
 		nextG = new int[toG.Length]; edgePtrG = 0;
 
 		tri = new int[n + 1][];
