@@ -18,14 +18,13 @@ public class Program
 	static int[] headT, toT, nextT; static int edgePtrT;
 	static void AddT(int u, int v) { toT[edgePtrT] = v; nextT[edgePtrT] = headT[u]; headT[u] = edgePtrT++; }
 
-	// triangle vertices flattened
 	static int[] tri0, tri1, tri2;
 	static long Key(int a, int b) { if (a > b) { int t = a; a = b; b = t; } return ((long)a << 32) | (uint)b; }
 
-	const int LOG = 20; // sufficient for n <= 2e5
+	static int LOG; // dynamic
 	static int[] depth;
-	static int[] up; // size (n+1)*LOG
-	static int[] mat; // size (n+1)*LOG*9, flattened 3x3 per level
+	static int[] up;
+	static int[] mat;
 	static readonly int INF = 1 << 28;
 
 	static int[] qs, qt;
@@ -33,36 +32,77 @@ public class Program
 	static int UpIndex(int node, int k) => node * LOG + k;
 	static int MatOffset(int node, int k) => (node * LOG + k) * 9;
 
+	// Custom long->int hash map (open addressing)
+	sealed class LongIntMap
+	{
+		public long[] keys;
+		public int[] vals;
+		public int mask;
+		public int size;
+		public LongIntMap(int expected)
+		{
+			int cap = 1; while (cap < expected * 2) cap <<= 1; // load factor <= 0.5
+			keys = new long[cap]; vals = new int[cap]; mask = cap - 1; size = 0;
+		}
+		private void Rehash()
+		{
+			long[] oldK = keys; int[] oldV = vals; int oldCap = oldK.Length;
+			int cap = oldCap << 1; keys = new long[cap]; vals = new int[cap]; mask = cap - 1; size = 0;
+			for (int i = 0; i < oldCap; i++)
+			{
+				long k = oldK[i]; if (k == 0) continue; Put(k, oldV[i]);
+			}
+		}
+		public void Put(long k, int v)
+		{
+			int idx = (int)((ulong)k * 11400714819323198485UL >> 57) & mask; // 7 high bits hash, adjust by mask
+			while (true)
+			{
+				long e = keys[idx];
+				if (e == 0) { keys[idx] = k; vals[idx] = v; if (++size * 2 > keys.Length) Rehash(); return; }
+				if (e == k) { vals[idx] = v; return; }
+				idx = (idx + 1) & mask;
+			}
+		}
+		public int Get(long k)
+		{
+			int idx = (int)((ulong)k * 11400714819323198485UL >> 57) & mask;
+			while (true)
+			{
+				long e = keys[idx]; if (e == 0) return 0; if (e == k) return vals[idx]; idx = (idx + 1) & mask;
+			}
+		}
+	}
+
 	public static void Main()
 	{
 		var fs = new FastScanner(Console.OpenStandardInput());
 		n = fs.NextInt();
 
-		// Build triangle tree
 		headT = new int[n + 5]; Array.Fill(headT, -1);
 		toT = new int[Math.Max(1, (n - 3) * 2 + 5)]; nextT = new int[toT.Length]; edgePtrT = 0;
 
 		tri0 = new int[n + 1]; tri1 = new int[n + 1]; tri2 = new int[n + 1];
 		tri0[3] = 1; tri1[3] = 2; tri2[3] = 3;
 
-		var map = new System.Collections.Generic.Dictionary<long, int>(2 * n);
-		map[Key(1, 2)] = 3; map[Key(2, 3)] = 3; map[Key(1, 3)] = 3;
+		var map = new LongIntMap(Math.Max(16, 4 * n));
+		map.Put(Key(1, 2), 3); map.Put(Key(2, 3), 3); map.Put(Key(1, 3), 3);
 
 		for (int i = 4; i <= n; i++)
 		{
 			int u = fs.NextInt(); int v = fs.NextInt();
 			tri0[i] = i; tri1[i] = u; tri2[i] = v;
-			int p = map[Key(u, v)];
+			int p = map.Get(Key(u, v));
 			AddT(p, i); AddT(i, p);
-			map[Key(u, v)] = i;
-			map[Key(u, i)] = i; map[Key(v, i)] = i;
+			map.Put(Key(u, v), i);
+			map.Put(Key(u, i), i); map.Put(Key(v, i), i);
 		}
 
 		q = fs.NextInt();
 		qs = new int[q]; qt = new int[q];
 		for (int i = 0; i < q; i++) { qs[i] = fs.NextInt(); qt[i] = fs.NextInt(); }
 
-		// Lifting arrays
+		LOG = 1; while ((1 << LOG) <= n) LOG++;
 		depth = new int[n + 1];
 		up = new int[(n + 1) * LOG];
 		mat = new int[(n + 1) * LOG * 9];
@@ -89,7 +129,6 @@ public class Program
 
 	static void BuildLifting()
 	{
-		// BFS/DFS to set parent and depth
 		var st = new int[n + 5]; int sp = 0; bool[] vis = new bool[n + 1];
 		int root = 3; vis[root] = true; depth[root] = 0; up[UpIndex(root, 0)] = 0; st[sp++] = root;
 		while (sp > 0)
@@ -100,14 +139,12 @@ public class Program
 				int w = toT[e]; if (vis[w]) continue; vis[w] = true; depth[w] = depth[u] + 1; up[UpIndex(w, 0)] = u; st[sp++] = w;
 			}
 		}
-		// base matrices (k=0)
 		for (int i = 3; i <= n; i++)
 		{
 			int p = up[UpIndex(i, 0)];
 			if (p != 0) FillBaseMatrix(i, p, MatOffset(i, 0));
 			else SetIdentity(MatOffset(i, 0));
 		}
-		// binary lifting
 		for (int k = 1; k < LOG; k++)
 		{
 			for (int i = 3; i <= n; i++)
@@ -135,8 +172,7 @@ public class Program
 	{
 		int ca = tri0[child], cb = tri1[child], cc = tri2[child];
 		int pa = tri0[parent], pb = tri1[parent], pc = tri2[parent];
-		// identify which two child vertices are shared with parent
-		int cx = -1, cy = -1, cz = -1; // indices 0..2 in child's ordering
+		int cx = -1, cy = -1, cz = -1;
 		if (ca == pa || ca == pb || ca == pc) { if (cx == -1) cx = 0; else cy = 0; } else cz = 0;
 		if (cb == pa || cb == pb || cb == pc) { if (cx == -1) cx = 1; else cy = 1; } else cz = 1;
 		if (cc == pa || cc == pb || cc == pc) { if (cx == -1) cx = 2; else cy = 2; } else cz = 2;
@@ -145,9 +181,7 @@ public class Program
 		int px = (pa == vx ? 0 : (pb == vx ? 1 : 2));
 		int py = (pa == vy ? 0 : (pb == vy ? 1 : 2));
 		int pd = 3 - px - py;
-		// initialize INF
 		for (int i = 0; i < 9; i++) mat[off + i] = INF;
-		// transitions: distance inside union of two triangles
 		mat[off + cx * 3 + px] = 0; mat[off + cx * 3 + py] = 1; mat[off + cx * 3 + pd] = 1;
 		mat[off + cy * 3 + px] = 1; mat[off + cy * 3 + py] = 0; mat[off + cy * 3 + pd] = 1;
 		mat[off + cz * 3 + px] = 1; mat[off + cz * 3 + py] = 1; mat[off + cz * 3 + pd] = 2;
@@ -155,7 +189,6 @@ public class Program
 
 	static void ComposeInto(int aOff, int bOff, int cOff)
 	{
-		// C = A ⊗ B where each is 3x3 at given offsets
 		for (int j = 0; j < 3; j++)
 		{
 			int b0 = mat[bOff + j]; int b1 = mat[bOff + 3 + j]; int b2 = mat[bOff + 6 + j];
@@ -187,13 +220,11 @@ public class Program
 	{
 		if (triId == 3)
 		{
-			// vertices are 1,2,3
 			v0 = (vertex == 1) ? 0 : 1;
 			v1 = (vertex == 2) ? 0 : 1;
 			v2 = (vertex == 3) ? 0 : 1;
 			return;
 		}
-		// for triId >= 4: ordering is (id, u, v)
 		if (vertex == tri0[triId]) { v0 = 0; v1 = 1; v2 = 1; return; }
 		if (vertex == tri1[triId]) { v0 = 1; v1 = 0; v2 = 1; return; }
 		if (vertex == tri2[triId]) { v0 = 1; v1 = 1; v2 = 0; return; }
