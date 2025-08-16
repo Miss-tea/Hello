@@ -61,14 +61,18 @@ public class Program
 	static int[] vertexMark; // mark vertices that are in current component (stamp)
 	static int vertexStamp = 1;
 
-	static int[] childVertexMark; // mark vertices in a child subtree (stamp)
-	static int childVertexStamp = 1;
+	// For assigning vertices to children at a centroid
+	static int[] childAssignStamp; // stamp showing assignment belongs to current centroid
+	static int[] childIdOfVertex; // id (1..k) of which child component a vertex belongs to at current centroid
+	static int currentAssignStamp = 1;
 
 	static int[] triVisitMark; // temporary visit mark for collecting child subtree triangles (stamp)
 	static int triVisitStamp = 1;
 
-	// Distance buffers reused per level
+	// Distance buffers + visited stamps reused per level
 	static int[] distA, distB, distC; // distances from the centroid triangle's three portals
+	static int[] markA, markB, markC; // visited stamps for the three BFS runs
+	static int stampA, stampB, stampC;
 	static int[] bfsQueue; // queue buffer reused
 
 	public static void Main()
@@ -129,11 +133,15 @@ public class Program
 		triSizeTmp = new int[n + 1];
 		triCompMark = new int[n + 1];
 		vertexMark = new int[n + 1];
-		childVertexMark = new int[n + 1];
+		childAssignStamp = new int[n + 1];
+		childIdOfVertex = new int[n + 1];
 		triVisitMark = new int[n + 1];
 		distA = new int[n + 1];
 		distB = new int[n + 1];
 		distC = new int[n + 1];
+		markA = new int[n + 1];
+		markB = new int[n + 1];
+		markC = new int[n + 1];
 		bfsQueue = new int[n + 5];
 
 		// All query indices
@@ -227,47 +235,42 @@ public class Program
 			if (maxPart < bestMaxPart) { bestMaxPart = maxPart; centroid = u; }
 		}
 
-		// Build vertex set for this component (include centroid triangle vertices)
+		// Build vertex set membership for this component (include centroid triangle vertices)
 		vertexStamp++;
-		var compVertices = new List<int>();
 		for (int i = 0; i < triList.Count; i++)
 		{
 			int t = triList[i];
 			var tv = triVerts[t];
-			for (int j = 0; j < 3; j++)
-			{
-				int vtx = tv[j];
-				if (vertexMark[vtx] != vertexStamp)
-				{
-					vertexMark[vtx] = vertexStamp;
-					compVertices.Add(vtx);
-				}
-			}
+			vertexMark[tv[0]] = vertexStamp;
+			vertexMark[tv[1]] = vertexStamp;
+			vertexMark[tv[2]] = vertexStamp;
 		}
 
-		// Compute distances from the centroid triangle's three portals to all vertices in this component
+		// Compute distances from the centroid triangle's three portals to all reachable vertices in this component using stamps (no resets)
 		var portals = triVerts[centroid];
-		BFSRestricted(portals[0], compVertices, distA);
-		BFSRestricted(portals[1], compVertices, distB);
-		BFSRestricted(portals[2], compVertices, distC);
+		RunBFSWithStamp(portals[0], markA, ref stampA, distA);
+		RunBFSWithStamp(portals[1], markB, ref stampB, distB);
+		RunBFSWithStamp(portals[2], markC, ref stampC, distC);
 
 		// Process queries in this component
 		for (int i = 0; i < queryIndices.Count; i++)
 		{
 			int idx = queryIndices[i];
-			int s = qs[idx], t = qt[idx];
 			if (answer[idx] == 0) continue;
+			int s = qs[idx], t = qt[idx];
 			if (vertexMark[s] != vertexStamp || vertexMark[t] != vertexStamp) continue;
 
 			int best = answer[idx];
-			// same portal
-			int ds0 = distA[s], dt0 = distA[t];
+			int ds0 = (markA[s] == stampA) ? distA[s] : -1;
+			int dt0 = (markA[t] == stampA) ? distA[t] : -1;
 			if (ds0 >= 0 && dt0 >= 0) { int cand = ds0 + dt0; if (cand < best) best = cand; }
-			int ds1 = distB[s], dt1 = distB[t];
+			int ds1 = (markB[s] == stampB) ? distB[s] : -1;
+			int dt1 = (markB[t] == stampB) ? distB[t] : -1;
 			if (ds1 >= 0 && dt1 >= 0) { int cand = ds1 + dt1; if (cand < best) best = cand; }
-			int ds2 = distC[s], dt2 = distC[t];
+			int ds2 = (markC[s] == stampC) ? distC[s] : -1;
+			int dt2 = (markC[t] == stampC) ? distC[t] : -1;
 			if (ds2 >= 0 && dt2 >= 0) { int cand = ds2 + dt2; if (cand < best) best = cand; }
-			// different portals (cost +1 to jump within triangle)
+
 			if (ds0 >= 0 && dt1 >= 0) { int cand = ds0 + dt1 + 1; if (cand < best) best = cand; }
 			if (ds0 >= 0 && dt2 >= 0) { int cand = ds0 + dt2 + 1; if (cand < best) best = cand; }
 			if (ds1 >= 0 && dt0 >= 0) { int cand = ds1 + dt0 + 1; if (cand < best) best = cand; }
@@ -289,11 +292,15 @@ public class Program
 			childRoots.Add(nb);
 		}
 
-		// For each child, collect its triangle set and vertex set (excluding centroid's three vertices), filter queries and recurse
-		foreach (var childRoot in childRoots)
+		// Assign vertices to child ids in a single pass
+		currentAssignStamp++;
+		int p0 = portals[0], p1 = portals[1], p2 = portals[2];
+		int childCount = childRoots.Count;
+		for (int idxChild = 0; idxChild < childCount; idxChild++)
 		{
-			// collect triangles in this child subtree (with centroid removed)
-			var childTriList = new List<int>();
+			int childRoot = childRoots[idxChild];
+			int childId = idxChild + 1; // 1..k
+			// collect triangles in this child subtree (with centroid removed) to assign vertices
 			triVisitStamp++;
 			var st = new Stack<int>();
 			st.Push(childRoot);
@@ -303,7 +310,11 @@ public class Program
 				int u2 = st.Pop();
 				if (triVisitMark[u2] == triVisitStamp) continue;
 				triVisitMark[u2] = triVisitStamp;
-				childTriList.Add(u2);
+				var tv = triVerts[u2];
+				int a = tv[0], b = tv[1], c = tv[2];
+				if (a != p0 && a != p1 && a != p2) { childAssignStamp[a] = currentAssignStamp; childIdOfVertex[a] = childId; }
+				if (b != p0 && b != p1 && b != p2) { childAssignStamp[b] = currentAssignStamp; childIdOfVertex[b] = childId; }
+				if (c != p0 && c != p1 && c != p2) { childAssignStamp[c] = currentAssignStamp; childIdOfVertex[c] = childId; }
 				foreach (var w in triAdj[u2])
 				{
 					if (triRemoved[w]) continue;
@@ -311,46 +322,40 @@ public class Program
 					st.Push(w);
 				}
 			}
+		}
 
-			// mark vertices in child (exclude centroid vertices)
-			childVertexStamp++;
-			int p0 = portals[0], p1 = portals[1], p2 = portals[2];
-			for (int i = 0; i < childTriList.Count; i++)
+		// Bucket queries to children in a single pass
+		var buckets = new List<int>[childCount];
+		for (int i = 0; i < childCount; i++) buckets[i] = new List<int>();
+		for (int i = 0; i < queryIndices.Count; i++)
+		{
+			int idx = queryIndices[i];
+			if (answer[idx] == 0) continue;
+			int s = qs[idx], t = qt[idx];
+			if (childAssignStamp[s] == currentAssignStamp && childAssignStamp[t] == currentAssignStamp)
 			{
-				int t = childTriList[i];
-				var tv = triVerts[t];
-				for (int j = 0; j < 3; j++)
+				int idS = childIdOfVertex[s];
+				if (idS == childIdOfVertex[t])
 				{
-					int vtx = tv[j];
-					if (vtx == p0 || vtx == p1 || vtx == p2) continue;
-					childVertexMark[vtx] = childVertexStamp;
+					buckets[idS - 1].Add(idx);
 				}
 			}
+		}
 
-			var nextQueries = new List<int>();
-			for (int i = 0; i < queryIndices.Count; i++)
-			{
-				int idx = queryIndices[i];
-				int s = qs[idx], t = qt[idx];
-				if (childVertexMark[s] == childVertexStamp && childVertexMark[t] == childVertexStamp)
-				{
-					nextQueries.Add(idx);
-				}
-			}
-
-			if (nextQueries.Count > 0)
-			{
-				Decompose(childRoot, nextQueries);
-			}
+		// Recurse
+		for (int idxChild = 0; idxChild < childCount; idxChild++)
+		{
+			if (buckets[idxChild].Count == 0) continue;
+			Decompose(childRoots[idxChild], buckets[idxChild]);
 		}
 	}
 
-	static void BFSRestricted(int src, List<int> allowedVertices, int[] dist)
+	static void RunBFSWithStamp(int src, int[] mark, ref int stamp, int[] dist)
 	{
-		// initialize distances for allowed vertices only
-		for (int i = 0; i < allowedVertices.Count; i++) dist[allowedVertices[i]] = -1;
-		dist[src] = 0;
+		stamp++;
 		int head = 0, tail = 0;
+		mark[src] = stamp;
+		dist[src] = 0;
 		bfsQueue[tail++] = src;
 		while (head < tail)
 		{
@@ -360,7 +365,8 @@ public class Program
 			{
 				int w = adj[j];
 				if (vertexMark[w] != vertexStamp) continue; // not in this component
-				if (dist[w] != -1) continue;
+				if (mark[w] == stamp) continue;
+				mark[w] = stamp;
 				dist[w] = dist[u] + 1;
 				bfsQueue[tail++] = w;
 			}
