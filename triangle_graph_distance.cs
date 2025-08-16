@@ -55,7 +55,7 @@ public class Program
 		}
 		public void Put(long k, int v)
 		{
-			int idx = (int)((ulong)k * 11400714819323198485UL >> 57) & mask; // 7 high bits hash, adjust by mask
+			int idx = (int)((ulong)k * 11400714819323198485UL) & mask;
 			while (true)
 			{
 				long e = keys[idx];
@@ -66,7 +66,7 @@ public class Program
 		}
 		public int Get(long k)
 		{
-			int idx = (int)((ulong)k * 11400714819323198485UL >> 57) & mask;
+			int idx = (int)((ulong)k * 11400714819323198485UL) & mask;
 			while (true)
 			{
 				long e = keys[idx]; if (e == 0) return 0; if (e == k) return vals[idx]; idx = (idx + 1) & mask;
