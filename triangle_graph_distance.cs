@@ -14,66 +14,43 @@ public class Program
 		public int NextInt() { int c; do { c = Read(); } while (c <= 32); int sign = 1; if (c == '-') { sign = -1; c = Read(); } int x = 0; while (c > 32) { x = x * 10 + c - 48; c = Read(); } return x * sign; }
 	}
 
-	// Graph (original): array adjacency
 	static int n, q;
-	static int[] headG, toG, nextG; static int edgePtrG;
-	static void AddG(int u, int v) { toG[edgePtrG] = v; nextG[edgePtrG] = headG[u]; headG[u] = edgePtrG++; }
-
-	// Triangle tree (3..n): array adjacency
+	// Triangle tree adjacency (3..n)
 	static int[] headT, toT, nextT; static int edgePtrT;
 	static void AddT(int u, int v) { toT[edgePtrT] = v; nextT[edgePtrT] = headT[u]; headT[u] = edgePtrT++; }
 
-	static int[][] tri; // tri[i][0..2]
-
-	// Build helpers
+	static int[][] tri; // tri[i] = {a,b,c}
 	static long Key(int a, int b) { if (a > b) { int t = a; a = b; b = t; } return ((long)a << 32) | (uint)b; }
 
-	// Decomposition state
-	static bool[] removed;
-	static int[] compMarkT; static int compStampT;
-	static int[] parentT; static int[] sizeT; static int[] orderT;
-	static int[] stackT; // custom stack for tree traversals
-	
-	static int[] compMarkV; static int compStampV;
-	
-	static int[] dist0, dist1, dist2, vis0, vis1, vis2; static int stamp0, stamp1, stamp2;
-	static int[] qbuf;
-	
-	// assign vertices to children (per centroid)
-	static int[] assignStamp, assignId; static int assignStampCur;
-	static int[] visitT; static int visitTStamp;
-	
-	// queries
-	static int[] sQ, tQ, ansQ;
-	static int[] bufA, bufB; // alternating buffers for query indices
+	// Binary lifting on triangle tree
+	const int LOG = 20;
+	static int[] depth;
+	static int[][] up; // parent pointers
+	static int[][] upMat; // for each node: flattened 3x3 matrices for 2^k jumps: size LOG*9
+	static int INF = 1 << 28;
+
+	// Queries
+	static int[] qs, qt;
 
 	public static void Main()
 	{
 		var fs = new FastScanner(Console.OpenStandardInput());
 		n = fs.NextInt();
-		headG = new int[n + 5]; Array.Fill(headG, -1);
-		toG = new int[4 * n + 10]; // total directed edges = 2*(2n-3) <= 4n-6
-		nextG = new int[toG.Length]; edgePtrG = 0;
 
+		// Build triangle tree
 		tri = new int[n + 1][];
 		headT = new int[n + 5]; Array.Fill(headT, -1);
-		toT = new int[(n - 3) * 2 + 10]; nextT = new int[toT.Length]; edgePtrT = 0;
+		toT = new int[(n - 3) * 2 + 5]; nextT = new int[toT.Length]; edgePtrT = 0;
 
-		// initial triangle 3: 1-2-3
 		tri[3] = new int[3] { 1, 2, 3 };
-		AddG(1, 2); AddG(2, 1);
-		AddG(2, 3); AddG(3, 2);
-		AddG(1, 3); AddG(3, 1);
-
 		var map = new System.Collections.Generic.Dictionary<long, int>(2 * n);
 		map[Key(1, 2)] = 3; map[Key(2, 3)] = 3; map[Key(1, 3)] = 3;
 
-		int[] u = new int[n + 1], v = new int[n + 1];
+		int[] u = new int[n + 1];
+		int[] v = new int[n + 1];
 		for (int i = 4; i <= n; i++)
 		{
 			u[i] = fs.NextInt(); v[i] = fs.NextInt();
-			AddG(i, u[i]); AddG(u[i], i);
-			AddG(i, v[i]); AddG(v[i], i);
 			tri[i] = new int[3] { i, u[i], v[i] };
 			int p = map[Key(u[i], v[i])];
 			AddT(p, i); AddT(i, p);
@@ -82,169 +59,166 @@ public class Program
 		}
 
 		q = fs.NextInt();
-		sQ = new int[q]; tQ = new int[q]; ansQ = new int[q];
-		for (int i = 0; i < q; i++) { int s = fs.NextInt(), t = fs.NextInt(); sQ[i] = s; tQ[i] = t; ansQ[i] = (s == t) ? 0 : int.MaxValue / 4; }
+		qs = new int[q]; qt = new int[q];
+		for (int i = 0; i < q; i++) { qs[i] = fs.NextInt(); qt[i] = fs.NextInt(); }
 
-		removed = new bool[n + 1];
-		compMarkT = new int[n + 1]; parentT = new int[n + 1]; sizeT = new int[n + 1]; orderT = new int[n + 1]; stackT = new int[n + 5];
-		compMarkV = new int[n + 1];
-		dist0 = new int[n + 1]; dist1 = new int[n + 1]; dist2 = new int[n + 1];
-		vis0 = new int[n + 1]; vis1 = new int[n + 1]; vis2 = new int[n + 1];
-		qbuf = new int[n + 5];
-		assignStamp = new int[n + 1]; assignId = new int[n + 1];
-		visitT = new int[n + 1];
-		bufA = new int[Math.Max(1, q)]; bufB = new int[Math.Max(1, q)];
+		// Precompute parent and matrices
+		depth = new int[n + 1];
+		up = new int[n + 1][];
+		upMat = new int[n + 1][];
+		for (int i = 0; i <= n; i++) { up[i] = new int[LOG]; upMat[i] = new int[LOG * 9]; }
 
-		// seed queries array 0..q-1 into bufA
-		for (int i = 0; i < q; i++) bufA[i] = i;
-		DecomposeArray(3, bufA, 0, q, bufB);
+		BuildLifting();
 
-		var sb = new StringBuilder();
-		for (int i = 0; i < q; i++) sb.AppendLine(ansQ[i].ToString());
+		var sb = new StringBuilder(q * 3);
+		for (int i = 0; i < q; i++)
+		{
+			int s = qs[i], t = qt[i];
+			int ts = (s >= 4) ? s : 3; // representative triangle for a vertex
+			int tt = (t >= 4) ? t : 3;
+			if (s == t) { sb.AppendLine("0"); continue; }
+			int l = LCA(ts, tt);
+			int[] vs = InitVector(ts, s);
+			int[] vt = InitVector(tt, t);
+			LiftTo(ts, l, vs);
+			LiftTo(tt, l, vt);
+			int ans = CombineAtL(vs, vt);
+			sb.AppendLine(ans.ToString());
+		}
 		Console.Write(sb.ToString());
 	}
 
-	static void DecomposeArray(int startT, int[] src, int qStart, int qLen, int[] dst)
+	static void BuildLifting()
 	{
-		if (qLen == 0) return;
-		// collect component triangles via stack ignoring removed
-		compStampT++;
-		int top = 0; // order length
-		int sp = 0; stackT[sp++] = startT; compMarkT[startT] = compStampT; parentT[startT] = -1;
+		var st = new int[n + 5]; int sp = 0;
+		int root = 3; up[root][0] = 0; depth[root] = 0; st[sp++] = root;
+		var parent = new int[n + 1]; parent[root] = 0;
+		var visited = new bool[n + 1]; visited[root] = true;
 		while (sp > 0)
 		{
-			int u = stackT[--sp];
-			orderT[top++] = u;
+			int u = st[--sp];
 			for (int e = headT[u]; e != -1; e = nextT[e])
 			{
-				int w = toT[e]; if (removed[w] || compMarkT[w] == compStampT) continue;
-				compMarkT[w] = compStampT; parentT[w] = u; stackT[sp++] = w;
+				int w = toT[e]; if (visited[w]) continue; visited[w] = true; parent[w] = u; depth[w] = depth[u] + 1; st[sp++] = w;
 			}
 		}
-		if (top == 0) return;
-		for (int i = top - 1; i >= 0; i--)
+		// set up[.][0] and base matrices
+		for (int i = 3; i <= n; i++)
 		{
-			int u = orderT[i]; int s = 1;
-			for (int e = headT[u]; e != -1; e = nextT[e])
-			{
-				int w = toT[e]; if (removed[w] || compMarkT[w] != compStampT) continue; if (parentT[w] == u) s += sizeT[w];
-			}
-			sizeT[u] = s;
+			int p = parent[i]; up[i][0] = p;
+			if (p != 0) FillBaseMatrix(i, p, upMat[i], 0);
 		}
-		int total = top, centroid = -1, best = int.MaxValue;
-		for (int i = 0; i < top; i++)
+		// binary lifting
+		for (int k = 1; k < LOG; k++)
 		{
-			int u = orderT[i]; int mx = total - sizeT[u];
-			for (int e = headT[u]; e != -1; e = nextT[e]) { int w = toT[e]; if (removed[w] || compMarkT[w] != compStampT) continue; if (parentT[w] == u && sizeT[w] > mx) mx = sizeT[w]; }
-			if (mx < best) { best = mx; centroid = u; }
-		}
-
-		// mark vertices in this component
-		compStampV++;
-		for (int i = 0; i < top; i++) { var v = tri[orderT[i]]; compMarkV[v[0]] = compStampV; compMarkV[v[1]] = compStampV; compMarkV[v[2]] = compStampV; }
-
-		var port = tri[centroid];
-		RunBFS(port[0], ref stamp0, vis0, dist0);
-		RunBFS(port[1], ref stamp1, vis1, dist1);
-		RunBFS(port[2], ref stamp2, vis2, dist2);
-
-		// process queries crossing via centroid (constant-time per query)
-		for (int ii = 0; ii < qLen; ii++)
-		{
-			int id = src[qStart + ii]; if (ansQ[id] == 0) continue; int s = sQ[id], t = tQ[id];
-			if (compMarkV[s] != compStampV || compMarkV[t] != compStampV) continue;
-			int bestAns = ansQ[id];
-			int a = (vis0[s] == stamp0 && vis0[t] == stamp0) ? dist0[s] + dist0[t] : int.MaxValue;
-			int b = (vis1[s] == stamp1 && vis1[t] == stamp1) ? dist1[s] + dist1[t] : int.MaxValue;
-			int c = (vis2[s] == stamp2 && vis2[t] == stamp2) ? dist2[s] + dist2[t] : int.MaxValue;
-			if (a < bestAns) bestAns = a; if (b < bestAns) bestAns = b; if (c < bestAns) bestAns = c;
-			int a0 = (vis0[s] == stamp0) ? dist0[s] : int.MaxValue;
-			int a1 = (vis1[s] == stamp1) ? dist1[s] : int.MaxValue;
-			int a2 = (vis2[s] == stamp2) ? dist2[s] : int.MaxValue;
-			int b0 = (vis0[t] == stamp0) ? dist0[t] : int.MaxValue;
-			int b1 = (vis1[t] == stamp1) ? dist1[t] : int.MaxValue;
-			int b2 = (vis2[t] == stamp2) ? dist2[t] : int.MaxValue;
-			if (a0 < int.MaxValue && b1 < int.MaxValue && a0 + b1 + 1 < bestAns) bestAns = a0 + b1 + 1;
-			if (a0 < int.MaxValue && b2 < int.MaxValue && a0 + b2 + 1 < bestAns) bestAns = a0 + b2 + 1;
-			if (a1 < int.MaxValue && b0 < int.MaxValue && a1 + b0 + 1 < bestAns) bestAns = a1 + b0 + 1;
-			if (a1 < int.MaxValue && b2 < int.MaxValue && a1 + b2 + 1 < bestAns) bestAns = a1 + b2 + 1;
-			if (a2 < int.MaxValue && b0 < int.MaxValue && a2 + b0 + 1 < bestAns) bestAns = a2 + b0 + 1;
-			if (a2 < int.MaxValue && b1 < int.MaxValue && a2 + b1 + 1 < bestAns) bestAns = a2 + b1 + 1;
-			if (bestAns < ansQ[id]) ansQ[id] = bestAns;
-		}
-
-		// gather children and assign vertices -> child id
-		removed[centroid] = true;
-		int deg = 0; for (int e = headT[centroid]; e != -1; e = nextT[e]) { int w = toT[e]; if (!removed[w] && compMarkT[w] == compStampT) deg++; }
-		int[] childRoots = new int[deg]; int pos = 0; for (int e = headT[centroid]; e != -1; e = nextT[e]) { int w = toT[e]; if (!removed[w] && compMarkT[w] == compStampT) childRoots[pos++] = w; }
-		assignStampCur++;
-		int p0 = port[0], p1 = port[1], p2 = port[2];
-		for (int i = 0; i < childRoots.Length; i++)
-		{
-			int root = childRoots[i]; int idc = i + 1;
-			visitTStamp++;
-			int stp = 0; stackT[stp++] = root; visitT[centroid] = visitTStamp;
-			while (stp > 0)
+			for (int i = 3; i <= n; i++)
 			{
-				int u = stackT[--stp]; if (visitT[u] == visitTStamp) continue; visitT[u] = visitTStamp;
-				var tv = tri[u];
-				int a = tv[0], b2 = tv[1], c2 = tv[2];
-				if (a != p0 && a != p1 && a != p2) { assignStamp[a] = assignStampCur; assignId[a] = idc; }
-				if (b2 != p0 && b2 != p1 && b2 != p2) { assignStamp[b2] = assignStampCur; assignId[b2] = idc; }
-				if (c2 != p0 && c2 != p1 && c2 != p2) { assignStamp[c2] = assignStampCur; assignId[c2] = idc; }
-				for (int e = headT[u]; e != -1; e = nextT[e]) { int w = toT[e]; if (removed[w]) continue; if (visitT[w] == visitTStamp) continue; stackT[stp++] = w; }
-			}
-		}
-
-		// bucket queries for children in a single pass into dst
-		int m = childRoots.Length;
-		if (m > 0)
-		{
-			int[] cnt = new int[m];
-			for (int ii = 0; ii < qLen; ii++)
-			{
-				int id = src[qStart + ii]; if (ansQ[id] == 0) continue; int s = sQ[id], t = tQ[id];
-				if (assignStamp[s] == assignStampCur && assignStamp[t] == assignStampCur)
-				{
-					int isid = assignId[s]; if (isid == assignId[t]) cnt[isid - 1]++;
-				}
-			}
-			int[] start = new int[m]; int[] posArr = new int[m];
-			int totalCnt = 0; for (int i = 0; i < m; i++) { start[i] = totalCnt; posArr[i] = totalCnt; totalCnt += cnt[i]; }
-			if (dst.Length < totalCnt) dst = new int[totalCnt]; // local replacement OK; reassigning local ref only
-			for (int ii = 0; ii < qLen; ii++)
-			{
-				int id = src[qStart + ii]; if (ansQ[id] == 0) continue; int s = sQ[id], t = tQ[id];
-				if (assignStamp[s] == assignStampCur && assignStamp[t] == assignStampCur)
-				{
-					int isid = assignId[s], itid = assignId[t]; if (isid == itid)
-					{
-						int p = posArr[isid - 1]++;
-						dst[p] = id;
-					}
-				}
-			}
-			for (int i = 0; i < m; i++)
-			{
-				int lenChild = cnt[i]; if (lenChild == 0) continue;
-				int startIdx = start[i];
-				// swap roles: child's dst is src buffer
-				DecomposeArray(childRoots[i], dst, startIdx, lenChild, src);
+				int mid = up[i][k - 1];
+				if (mid == 0) { up[i][k] = 0; CopyIdentity(upMat[i], k * 9); continue; }
+				int anc = up[mid][k - 1]; up[i][k] = anc;
+				// compose matrices: M(i->anc) = M(i->mid) ⊗ M(mid->anc)
+				ComposeInto(upMat[i], (k - 1) * 9, upMat[mid], (k - 1) * 9, upMat[i], k * 9);
 			}
 		}
 	}
 
-	static void RunBFS(int src, ref int stamp, int[] vis, int[] dist)
+	static void CopyIdentity(int[] dst, int off)
 	{
-		stamp++;
-		int h = 0, t = 0; vis[src] = stamp; dist[src] = 0; qbuf[t++] = src;
-		while (h < t)
+		dst[off + 0] = 0; dst[off + 1] = INF; dst[off + 2] = INF;
+		dst[off + 3] = INF; dst[off + 4] = 0; dst[off + 5] = INF;
+		dst[off + 6] = INF; dst[off + 7] = INF; dst[off + 8] = 0;
+	}
+
+	static void FillBaseMatrix(int child, int parent, int[] arr, int off)
+	{
+		var c = tri[child]; var p = tri[parent];
+		int cx = -1, cy = -1, cz = -1;
+		// find shared vertices
+		for (int i = 0; i < 3; i++)
 		{
-			int u = qbuf[h++];
-			for (int e = headG[u]; e != -1; e = nextG[e])
-			{
-				int w = toG[e]; if (compMarkV[w] != compStampV) continue; if (vis[w] == stamp) continue; vis[w] = stamp; dist[w] = dist[u] + 1; qbuf[t++] = w;
-			}
+			if (c[i] == p[0] || c[i] == p[1] || c[i] == p[2]) { if (cx == -1) cx = i; else cy = i; } else cz = i;
 		}
+		int vx = c[cx], vy = c[cy];
+		int px = (p[0] == vx) ? 0 : (p[1] == vx) ? 1 : 2;
+		int py = (p[0] == vy) ? 0 : (p[1] == vy) ? 1 : 2;
+		int pd = 3 - px - py; // index of parent's third vertex
+		for (int i = 0; i < 9; i++) arr[off + i] = INF;
+		// row for child vertex vx (cx)
+		arr[off + cx * 3 + px] = 0; arr[off + cx * 3 + py] = 1; arr[off + cx * 3 + pd] = 1;
+		// row for child vertex vy (cy)
+		arr[off + cy * 3 + px] = 1; arr[off + cy * 3 + py] = 0; arr[off + cy * 3 + pd] = 1;
+		// row for child vertex cz
+		arr[off + cz * 3 + px] = 1; arr[off + cz * 3 + py] = 1; arr[off + cz * 3 + pd] = 2;
+	}
+
+	static void ComposeInto(int[] A, int aOff, int[] B, int bOff, int[] C, int cOff)
+	{
+		// C = A ⊗ B (min-plus)
+		for (int j = 0; j < 3; j++)
+		{
+			int a0 = A[aOff + 0]; int a1 = A[aOff + 1]; int a2 = A[aOff + 2];
+			int b0 = B[bOff + j]; int b1 = B[bOff + 3 + j]; int b2 = B[bOff + 6 + j];
+			int v0 = a0 + b0; int v1 = a1 + b1; int v2 = a2 + b2; int best = v0 < v1 ? v0 : v1; if (v2 < best) best = v2; C[cOff + j] = best;
+			// row 2
+			a0 = A[aOff + 3]; a1 = A[aOff + 4]; a2 = A[aOff + 5];
+			v0 = a0 + b0; v1 = a1 + b1; v2 = a2 + b2; best = v0 < v1 ? v0 : v1; if (v2 < best) best = v2; C[cOff + 3 + j] = best;
+			// row 3
+			a0 = A[aOff + 6]; a1 = A[aOff + 7]; a2 = A[aOff + 8];
+			v0 = a0 + b0; v1 = a1 + b1; v2 = a2 + b2; best = v0 < v1 ? v0 : v1; if (v2 < best) best = v2; C[cOff + 6 + j] = best;
+		}
+	}
+
+	static int LCA(int a, int b)
+	{
+		if (a == b) return a;
+		if (depth[a] < depth[b]) { int t = a; a = b; b = t; }
+		int diff = depth[a] - depth[b];
+		for (int k = 0; k < LOG; k++) if (((diff >> k) & 1) != 0) a = up[a][k];
+		if (a == b) return a;
+		for (int k = LOG - 1; k >= 0; k--)
+		{
+			if (up[a][k] != up[b][k]) { a = up[a][k]; b = up[b][k]; }
+		}
+		return up[a][0];
+	}
+
+	static int[] InitVector(int triId, int vertex)
+	{
+		var tv = tri[triId];
+		int[] v = new int[3];
+		for (int i = 0; i < 3; i++) v[i] = 1;
+		if (tv[0] == vertex) { v[0] = 0; return v; }
+		if (tv[1] == vertex) { v[1] = 0; return v; }
+		if (tv[2] == vertex) { v[2] = 0; return v; }
+		return v; // shouldn't happen
+	}
+
+	static void LiftTo(int node, int target, int[] vec)
+	{
+		int diff = depth[node] - depth[target];
+		for (int k = 0; k < LOG; k++)
+		{
+			if (((diff >> k) & 1) == 0) continue;
+			ApplyMat(vec, upMat[node], k * 9);
+			node = up[node][k];
+		}
+	}
+
+	static void ApplyMat(int[] vec, int[] mat, int off)
+	{
+		// vec' = vec ⊗ mat
+		int x0 = vec[0] + mat[off + 0]; int x1 = vec[1] + mat[off + 3]; int x2 = vec[2] + mat[off + 6]; int best0 = x0 < x1 ? x0 : x1; if (x2 < best0) best0 = x2;
+		int y0 = vec[0] + mat[off + 1]; int y1 = vec[1] + mat[off + 4]; int y2 = vec[2] + mat[off + 7]; int best1 = y0 < y1 ? y0 : y1; if (y2 < best1) best1 = y2;
+		int z0 = vec[0] + mat[off + 2]; int z1 = vec[1] + mat[off + 5]; int z2 = vec[2] + mat[off + 8]; int best2 = z0 < z1 ? z0 : z1; if (z2 < best2) best2 = z2;
+		vec[0] = best0; vec[1] = best1; vec[2] = best2;
+	}
+
+	static int CombineAtL(int[] a, int[] b)
+	{
+		int ans = Math.Min(Math.Min(a[0] + b[0], a[1] + b[1]), a[2] + b[2]);
+		// different vertices inside L costs +1
+		int v = Math.Min(Math.Min(a[0] + b[1], a[0] + b[2]), Math.Min(a[1] + b[0], Math.Min(a[1] + b[2], Math.Min(a[2] + b[0], a[2] + b[1]))));
+		if (v + 1 < ans) ans = v + 1;
+		return ans;
 	}
 }
