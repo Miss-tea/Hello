@@ -1,374 +1,223 @@
 using System;
 using System.IO;
 using System.Text;
-using System.Collections.Generic;
 
 public class Program
 {
-	// Fast scanner for input
 	sealed class FastScanner
 	{
-		private readonly Stream _stream;
-		private readonly byte[] _buf = new byte[1 << 16];
-		private int _len, _ptr;
-		public FastScanner(Stream stream) { _stream = stream; }
-		private int Read()
-		{
-			if (_ptr >= _len)
-			{
-				_len = _stream.Read(_buf, 0, _buf.Length);
-				_ptr = 0;
-				if (_len <= 0) return -1;
-			}
-			return _buf[_ptr++];
-		}
-		public int NextInt()
-		{
-			int c;
-			do { c = Read(); } while (c <= 32);
-			int sign = 1;
-			if (c == '-') { sign = -1; c = Read(); }
-			int x = 0;
-			while (c > 32) { x = x * 10 + (c - '0'); c = Read(); }
-			return x * sign;
-		}
+		private readonly Stream _s;
+		private readonly byte[] _b = new byte[1 << 16];
+		private int _l, _p;
+		public FastScanner(Stream s) { _s = s; }
+		private int Read() { if (_p >= _l) { _l = _s.Read(_b, 0, _b.Length); _p = 0; if (_l <= 0) return -1; } return _b[_p++]; }
+		public int NextInt() { int c; do { c = Read(); } while (c <= 32); int sign = 1; if (c == '-') { sign = -1; c = Read(); } int x = 0; while (c > 32) { x = x * 10 + c - 48; c = Read(); } return x * sign; }
 	}
 
-	// Graph and triangle tree
+	// Graph (original): array adjacency
 	static int n, q;
-	static List<int>[] graph; // original graph G (n nodes)
-	static List<int>[] triAdj; // triangle tree adjacency (nodes indexed by triangle id 3..n)
-	static int[][] triVerts; // for triangle id t, the three vertices
+	static int[] headG, toG, nextG; static int edgePtrG;
+	static void AddG(int u, int v) { toG[edgePtrG] = v; nextG[edgePtrG] = headG[u]; headG[u] = edgePtrG++; }
 
-	// Queries
-	static int[] qs, qt;
-	static int[] answer;
+	// Triangle tree (3..n): array adjacency
+	static int[] headT, toT, nextT; static int edgePtrT;
+	static void AddT(int u, int v) { toT[edgePtrT] = v; nextT[edgePtrT] = headT[u]; headT[u] = edgePtrT++; }
 
-	// Helpers for building triangle tree
-	static long EdgeKey(int a, int b)
-	{
-		if (a > b) { int tmp = a; a = b; b = tmp; }
-		return ((long)a << 32) | (uint)b;
-	}
+	static int[][] tri; // tri[i][0..2]
 
-	// Decomposition helpers
-	static bool[] triRemoved; // whether a triangle node is removed in centroid decomposition
-	static int[] triParentTmp; // temp parent when traversing a component
-	static int[] triSizeTmp; // subtree sizes for centroid computation
-	static int[] triCompMark; // mark triangles that are in current component (stamp)
-	static int triCompStamp = 1;
+	// Build helpers
+	static long Key(int a, int b) { if (a > b) { int t = a; a = b; b = t; } return ((long)a << 32) | (uint)b; }
 
-	static int[] vertexMark; // mark vertices that are in current component (stamp)
-	static int vertexStamp = 1;
-
-	// For assigning vertices to children at a centroid
-	static int[] childAssignStamp; // stamp showing assignment belongs to current centroid
-	static int[] childIdOfVertex; // id (1..k) of which child component a vertex belongs to at current centroid
-	static int currentAssignStamp = 1;
-
-	static int[] triVisitMark; // temporary visit mark for collecting child subtree triangles (stamp)
-	static int triVisitStamp = 1;
-
-	// Distance buffers + visited stamps reused per level
-	static int[] distA, distB, distC; // distances from the centroid triangle's three portals
-	static int[] markA, markB, markC; // visited stamps for the three BFS runs
-	static int stampA, stampB, stampC;
-	static int[] bfsQueue; // queue buffer reused
+	// Decomposition state
+	static bool[] removed;
+	static int[] compMarkT; static int compStampT;
+	static int[] parentT; static int[] sizeT; static int[] orderT;
+	
+	static int[] compMarkV; static int compStampV;
+	
+	static int[] dist0, dist1, dist2, vis0, vis1, vis2; static int stamp0, stamp1, stamp2;
+	static int[] qbuf;
+	
+	// assign vertices to children (per centroid)
+	static int[] assignStamp, assignId; static int assignStampCur;
+	static int[] visitT; static int visitTStamp;
+	
+	// queries
+	static int[] sQ, tQ, ansQ;
 
 	public static void Main()
 	{
 		var fs = new FastScanner(Console.OpenStandardInput());
 		n = fs.NextInt();
-		graph = new List<int>[n + 1];
-		for (int i = 1; i <= n; i++) graph[i] = new List<int>();
+		headG = new int[n + 5]; Array.Fill(headG, -1);
+		toG = new int[(n - 1 + 3) * 2 + 10]; // each new node adds 2 edges; initial 3 edges
+		nextG = new int[toG.Length]; edgePtrG = 0;
 
-		// triangle tree structures (triangles are 3..n)
-		triAdj = new List<int>[n + 1];
-		for (int i = 0; i <= n; i++) triAdj[i] = new List<int>();
-		triVerts = new int[n + 1][];
+		tri = new int[n + 1][];
+		headT = new int[n + 5]; Array.Fill(headT, -1);
+		toT = new int[(n - 3) * 2 + 10]; nextT = new int[toT.Length]; edgePtrT = 0;
 
-		// initial triangle 3: vertices 1,2,3
-		triVerts[3] = new int[] { 1, 2, 3 };
-		AddEdge(1, 2);
-		AddEdge(2, 3);
-		AddEdge(1, 3);
+		// initial triangle 3: 1-2-3
+		tri[3] = new int[3] { 1, 2, 3 };
+		AddG(1, 2); AddG(2, 1);
+		AddG(2, 3); AddG(3, 2);
+		AddG(1, 3); AddG(3, 1);
 
-		var lastTri = new Dictionary<long, int>(capacity: 2 * (2 * n + 10));
-		lastTri[EdgeKey(1, 2)] = 3;
-		lastTri[EdgeKey(2, 3)] = 3;
-		lastTri[EdgeKey(1, 3)] = 3;
+		var map = new System.Collections.Generic.Dictionary<long, int>(2 * n);
+		map[Key(1, 2)] = 3; map[Key(2, 3)] = 3; map[Key(1, 3)] = 3;
 
-		int[] u = new int[n + 1];
-		int[] v = new int[n + 1];
+		int[] u = new int[n + 1], v = new int[n + 1];
 		for (int i = 4; i <= n; i++)
 		{
-			u[i] = fs.NextInt();
-			v[i] = fs.NextInt();
-			AddEdge(i, u[i]);
-			AddEdge(i, v[i]);
-
-			triVerts[i] = new int[] { i, u[i], v[i] };
-			int parentTri = lastTri[EdgeKey(u[i], v[i])];
-			triAdj[parentTri].Add(i);
-			triAdj[i].Add(parentTri);
-			lastTri[EdgeKey(u[i], v[i])] = i;
-			lastTri[EdgeKey(u[i], i)] = i;
-			lastTri[EdgeKey(v[i], i)] = i;
+			u[i] = fs.NextInt(); v[i] = fs.NextInt();
+			AddG(i, u[i]); AddG(u[i], i);
+			AddG(i, v[i]); AddG(v[i], i);
+			tri[i] = new int[3] { i, u[i], v[i] };
+			int p = map[Key(u[i], v[i])];
+			AddT(p, i); AddT(i, p);
+			map[Key(u[i], v[i])] = i;
+			map[Key(u[i], i)] = i; map[Key(v[i], i)] = i;
 		}
 
 		q = fs.NextInt();
-		qs = new int[q];
-		qt = new int[q];
-		answer = new int[q];
-		for (int i = 0; i < q; i++)
-		{
-			qs[i] = fs.NextInt();
-			qt[i] = fs.NextInt();
-			answer[i] = (qs[i] == qt[i]) ? 0 : int.MaxValue / 4;
-		}
+		sQ = new int[q]; tQ = new int[q]; ansQ = new int[q];
+		for (int i = 0; i < q; i++) { int s = fs.NextInt(), t = fs.NextInt(); sQ[i] = s; tQ[i] = t; ansQ[i] = (s == t) ? 0 : int.MaxValue / 4; }
 
-		// Prepare arrays for decomposition
-		triRemoved = new bool[n + 1];
-		triParentTmp = new int[n + 1];
-		triSizeTmp = new int[n + 1];
-		triCompMark = new int[n + 1];
-		vertexMark = new int[n + 1];
-		childAssignStamp = new int[n + 1];
-		childIdOfVertex = new int[n + 1];
-		triVisitMark = new int[n + 1];
-		distA = new int[n + 1];
-		distB = new int[n + 1];
-		distC = new int[n + 1];
-		markA = new int[n + 1];
-		markB = new int[n + 1];
-		markC = new int[n + 1];
-		bfsQueue = new int[n + 5];
+		removed = new bool[n + 1];
+		compMarkT = new int[n + 1]; parentT = new int[n + 1]; sizeT = new int[n + 1]; orderT = new int[n + 1];
+		compMarkV = new int[n + 1];
+		dist0 = new int[n + 1]; dist1 = new int[n + 1]; dist2 = new int[n + 1];
+		vis0 = new int[n + 1]; vis1 = new int[n + 1]; vis2 = new int[n + 1];
+		qbuf = new int[n + 5];
+		assignStamp = new int[n + 1]; assignId = new int[n + 1];
+		visitT = new int[n + 1];
 
-		// All query indices
-		var allQueries = new List<int>(q);
-		for (int i = 0; i < q; i++) allQueries.Add(i);
+		var all = new System.Collections.Generic.List<int>(q);
+		for (int i = 0; i < q; i++) all.Add(i);
+		Decompose(3, all);
 
-		// Start decomposition from triangle 3 (always exists and tree is connected)
-		Decompose(3, allQueries);
-
-		var sb = new StringBuilder(q * 3);
-		for (int i = 0; i < q; i++) sb.AppendLine(answer[i].ToString());
+		var sb = new StringBuilder();
+		for (int i = 0; i < q; i++) sb.AppendLine(ansQ[i].ToString());
 		Console.Write(sb.ToString());
 	}
 
-	static void AddEdge(int a, int b)
+	static void Decompose(int startT, System.Collections.Generic.List<int> queries)
 	{
-		graph[a].Add(b);
-		graph[b].Add(a);
+		if (queries.Count == 0) return;
+		// collect component triangles via stack ignoring removed
+		compStampT++;
+		int top = 0; // order length
+		var st = new System.Collections.Generic.Stack<int>();
+		st.Push(startT); compMarkT[startT] = compStampT; parentT[startT] = -1;
+		while (st.Count > 0)
+		{
+			int u = st.Pop();
+			orderT[top++] = u;
+			for (int e = headT[u]; e != -1; e = nextT[e])
+			{
+				int w = toT[e]; if (removed[w] || compMarkT[w] == compStampT) continue;
+				compMarkT[w] = compStampT; parentT[w] = u; st.Push(w);
+			}
+		}
+		if (top == 0) return;
+		for (int i = top - 1; i >= 0; i--)
+		{
+			int u = orderT[i]; int s = 1;
+			for (int e = headT[u]; e != -1; e = nextT[e])
+			{
+				int w = toT[e]; if (removed[w] || compMarkT[w] != compStampT) continue; if (parentT[w] == u) s += sizeT[w];
+			}
+			sizeT[u] = s;
+		}
+		int total = top, centroid = -1, best = int.MaxValue;
+		for (int i = 0; i < top; i++)
+		{
+			int u = orderT[i]; int mx = total - sizeT[u];
+			for (int e = headT[u]; e != -1; e = nextT[e]) { int w = toT[e]; if (removed[w] || compMarkT[w] != compStampT) continue; if (parentT[w] == u && sizeT[w] > mx) mx = sizeT[w]; }
+			if (mx < best) { best = mx; centroid = u; }
+		}
+
+		// mark vertices in this component
+		compStampV++;
+		for (int i = 0; i < top; i++) { var v = tri[orderT[i]]; compMarkV[v[0]] = compStampV; compMarkV[v[1]] = compStampV; compMarkV[v[2]] = compStampV; }
+
+		var port = tri[centroid];
+		RunBFS(port[0], ref stamp0, vis0, dist0);
+		RunBFS(port[1], ref stamp1, vis1, dist1);
+		RunBFS(port[2], ref stamp2, vis2, dist2);
+
+		// process queries crossing via centroid (constant-time per query)
+		for (int i = 0; i < queries.Count; i++)
+		{
+			int id = queries[i]; if (ansQ[id] == 0) continue; int s = sQ[id], t = tQ[id];
+			if (compMarkV[s] != compStampV || compMarkV[t] != compStampV) continue;
+			int bestAns = ansQ[id];
+			int a = (vis0[s] == stamp0 && vis0[t] == stamp0) ? dist0[s] + dist0[t] : int.MaxValue;
+			int b = (vis1[s] == stamp1 && vis1[t] == stamp1) ? dist1[s] + dist1[t] : int.MaxValue;
+			int c = (vis2[s] == stamp2 && vis2[t] == stamp2) ? dist2[s] + dist2[t] : int.MaxValue;
+			if (a < bestAns) bestAns = a; if (b < bestAns) bestAns = b; if (c < bestAns) bestAns = c;
+			int a0 = (vis0[s] == stamp0) ? dist0[s] : int.MaxValue;
+			int a1 = (vis1[s] == stamp1) ? dist1[s] : int.MaxValue;
+			int a2 = (vis2[s] == stamp2) ? dist2[s] : int.MaxValue;
+			int b0 = (vis0[t] == stamp0) ? dist0[t] : int.MaxValue;
+			int b1 = (vis1[t] == stamp1) ? dist1[t] : int.MaxValue;
+			int b2 = (vis2[t] == stamp2) ? dist2[t] : int.MaxValue;
+			// cross via different portal (+1 inside centroid triangle)
+			if (a0 < int.MaxValue && b1 < int.MaxValue && a0 + b1 + 1 < bestAns) bestAns = a0 + b1 + 1;
+			if (a0 < int.MaxValue && b2 < int.MaxValue && a0 + b2 + 1 < bestAns) bestAns = a0 + b2 + 1;
+			if (a1 < int.MaxValue && b0 < int.MaxValue && a1 + b0 + 1 < bestAns) bestAns = a1 + b0 + 1;
+			if (a1 < int.MaxValue && b2 < int.MaxValue && a1 + b2 + 1 < bestAns) bestAns = a1 + b2 + 1;
+			if (a2 < int.MaxValue && b0 < int.MaxValue && a2 + b0 + 1 < bestAns) bestAns = a2 + b0 + 1;
+			if (a2 < int.MaxValue && b1 < int.MaxValue && a2 + b1 + 1 < bestAns) bestAns = a2 + b1 + 1;
+			if (bestAns < ansQ[id]) ansQ[id] = bestAns;
+		}
+
+		// gather children and assign vertices -> child id
+		removed[centroid] = true;
+		int deg = 0; for (int e = headT[centroid]; e != -1; e = nextT[e]) { int w = toT[e]; if (!removed[w] && compMarkT[w] == compStampT) deg++; }
+		var childRoots = new int[deg]; int pos = 0; for (int e = headT[centroid]; e != -1; e = nextT[e]) { int w = toT[e]; if (!removed[w] && compMarkT[w] == compStampT) childRoots[pos++] = w; }
+		assignStampCur++;
+		int p0 = port[0], p1 = port[1], p2 = port[2];
+		for (int i = 0; i < childRoots.Length; i++)
+		{
+			int root = childRoots[i]; int idc = i + 1;
+			visitTStamp++;
+			var s = new System.Collections.Generic.Stack<int>(); s.Push(root); visitT[centroid] = visitTStamp;
+			while (s.Count > 0)
+			{
+				int u = s.Pop(); if (visitT[u] == visitTStamp) continue; visitT[u] = visitTStamp;
+				var tv = tri[u];
+				int a = tv[0], b2 = tv[1], c2 = tv[2];
+				if (a != p0 && a != p1 && a != p2) { assignStamp[a] = assignStampCur; assignId[a] = idc; }
+				if (b2 != p0 && b2 != p1 && b2 != p2) { assignStamp[b2] = assignStampCur; assignId[b2] = idc; }
+				if (c2 != p0 && c2 != p1 && c2 != p2) { assignStamp[c2] = assignStampCur; assignId[c2] = idc; }
+				for (int e = headT[u]; e != -1; e = nextT[e]) { int w = toT[e]; if (removed[w]) continue; if (visitT[w] == visitTStamp) continue; s.Push(w); }
+			}
+		}
+
+		// bucket queries
+		var buckets = new System.Collections.Generic.List<int>[childRoots.Length]; for (int i = 0; i < buckets.Length; i++) buckets[i] = new System.Collections.Generic.List<int>();
+		for (int i = 0; i < queries.Count; i++)
+		{
+			int id = queries[i]; if (ansQ[id] == 0) continue; int s = sQ[id], t = tQ[id];
+			if (assignStamp[s] == assignStampCur && assignStamp[t] == assignStampCur)
+			{
+				int ids = assignId[s], idt = assignId[t]; if (ids == idt) buckets[ids - 1].Add(id);
+			}
+		}
+		for (int i = 0; i < childRoots.Length; i++) if (buckets[i].Count > 0) Decompose(childRoots[i], buckets[i]);
 	}
 
-	static void Decompose(int startTri, List<int> queryIndices)
-	{
-		if (queryIndices.Count == 0) return;
-
-		// Gather component triangles starting from startTri (ignoring removed)
-		var triList = new List<int>();
-		var order = new List<int>();
-		// BFS to mark component and get list
-		var qtri = new Queue<int>();
-		triCompStamp++;
-		triCompMark[startTri] = triCompStamp;
-		qtri.Enqueue(startTri);
-		while (qtri.Count > 0)
-		{
-			int u = qtri.Dequeue();
-			triList.Add(u);
-			foreach (var w in triAdj[u])
-			{
-				if (triRemoved[w] || triCompMark[w] == triCompStamp) continue;
-				triCompMark[w] = triCompStamp;
-				qtri.Enqueue(w);
-			}
-		}
-
-		if (triList.Count == 0) return;
-
-		// Build parent and order for centroid on this component
-		int root = startTri;
-		var stack = new Stack<int>();
-		triParentTmp[root] = -1;
-		stack.Push(root);
-		order.Clear();
-		while (stack.Count > 0)
-		{
-			int u = stack.Pop();
-			order.Add(u);
-			foreach (var w in triAdj[u])
-			{
-				if (triRemoved[w] || triCompMark[w] != triCompStamp) continue;
-				if (w == triParentTmp[u]) continue;
-				triParentTmp[w] = u;
-				stack.Push(w);
-			}
-		}
-
-		int total = order.Count;
-		for (int i = total - 1; i >= 0; i--)
-		{
-			int u = order[i];
-			int sz = 1;
-			foreach (var w in triAdj[u])
-			{
-				if (triRemoved[w] || triCompMark[w] != triCompStamp) continue;
-				if (triParentTmp[w] == u) sz += triSizeTmp[w];
-			}
-			triSizeTmp[u] = sz;
-		}
-
-		int centroid = -1;
-		int bestMaxPart = int.MaxValue;
-		for (int i = 0; i < total; i++)
-		{
-			int u = order[i];
-			int maxPart = total - triSizeTmp[u];
-			foreach (var w in triAdj[u])
-			{
-				if (triRemoved[w] || triCompMark[w] != triCompStamp) continue;
-				if (triParentTmp[w] == u)
-					if (triSizeTmp[w] > maxPart) maxPart = triSizeTmp[w];
-			}
-			if (maxPart < bestMaxPart) { bestMaxPart = maxPart; centroid = u; }
-		}
-
-		// Build vertex set membership for this component (include centroid triangle vertices)
-		vertexStamp++;
-		for (int i = 0; i < triList.Count; i++)
-		{
-			int t = triList[i];
-			var tv = triVerts[t];
-			vertexMark[tv[0]] = vertexStamp;
-			vertexMark[tv[1]] = vertexStamp;
-			vertexMark[tv[2]] = vertexStamp;
-		}
-
-		// Compute distances from the centroid triangle's three portals to all reachable vertices in this component using stamps (no resets)
-		var portals = triVerts[centroid];
-		RunBFSWithStamp(portals[0], markA, ref stampA, distA);
-		RunBFSWithStamp(portals[1], markB, ref stampB, distB);
-		RunBFSWithStamp(portals[2], markC, ref stampC, distC);
-
-		// Process queries in this component
-		for (int i = 0; i < queryIndices.Count; i++)
-		{
-			int idx = queryIndices[i];
-			if (answer[idx] == 0) continue;
-			int s = qs[idx], t = qt[idx];
-			if (vertexMark[s] != vertexStamp || vertexMark[t] != vertexStamp) continue;
-
-			int best = answer[idx];
-			int ds0 = (markA[s] == stampA) ? distA[s] : -1;
-			int dt0 = (markA[t] == stampA) ? distA[t] : -1;
-			if (ds0 >= 0 && dt0 >= 0) { int cand = ds0 + dt0; if (cand < best) best = cand; }
-			int ds1 = (markB[s] == stampB) ? distB[s] : -1;
-			int dt1 = (markB[t] == stampB) ? distB[t] : -1;
-			if (ds1 >= 0 && dt1 >= 0) { int cand = ds1 + dt1; if (cand < best) best = cand; }
-			int ds2 = (markC[s] == stampC) ? distC[s] : -1;
-			int dt2 = (markC[t] == stampC) ? distC[t] : -1;
-			if (ds2 >= 0 && dt2 >= 0) { int cand = ds2 + dt2; if (cand < best) best = cand; }
-
-			if (ds0 >= 0 && dt1 >= 0) { int cand = ds0 + dt1 + 1; if (cand < best) best = cand; }
-			if (ds0 >= 0 && dt2 >= 0) { int cand = ds0 + dt2 + 1; if (cand < best) best = cand; }
-			if (ds1 >= 0 && dt0 >= 0) { int cand = ds1 + dt0 + 1; if (cand < best) best = cand; }
-			if (ds1 >= 0 && dt2 >= 0) { int cand = ds1 + dt2 + 1; if (cand < best) best = cand; }
-			if (ds2 >= 0 && dt0 >= 0) { int cand = ds2 + dt0 + 1; if (cand < best) best = cand; }
-			if (ds2 >= 0 && dt1 >= 0) { int cand = ds2 + dt1 + 1; if (cand < best) best = cand; }
-
-			if (best < answer[idx]) answer[idx] = best;
-		}
-
-		// Prepare to recurse into each child component (exclude centroid's vertices for propagation)
-		triRemoved[centroid] = true;
-
-		var childRoots = new List<int>();
-		foreach (var nb in triAdj[centroid])
-		{
-			if (triRemoved[nb]) continue;
-			if (triCompMark[nb] != triCompStamp) continue; // not in this component
-			childRoots.Add(nb);
-		}
-
-		// Assign vertices to child ids in a single pass
-		currentAssignStamp++;
-		int p0 = portals[0], p1 = portals[1], p2 = portals[2];
-		int childCount = childRoots.Count;
-		for (int idxChild = 0; idxChild < childCount; idxChild++)
-		{
-			int childRoot = childRoots[idxChild];
-			int childId = idxChild + 1; // 1..k
-			// collect triangles in this child subtree (with centroid removed) to assign vertices
-			triVisitStamp++;
-			var st = new Stack<int>();
-			st.Push(childRoot);
-			triVisitMark[centroid] = triVisitStamp; // block crossing into centroid
-			while (st.Count > 0)
-			{
-				int u2 = st.Pop();
-				if (triVisitMark[u2] == triVisitStamp) continue;
-				triVisitMark[u2] = triVisitStamp;
-				var tv = triVerts[u2];
-				int a = tv[0], b = tv[1], c = tv[2];
-				if (a != p0 && a != p1 && a != p2) { childAssignStamp[a] = currentAssignStamp; childIdOfVertex[a] = childId; }
-				if (b != p0 && b != p1 && b != p2) { childAssignStamp[b] = currentAssignStamp; childIdOfVertex[b] = childId; }
-				if (c != p0 && c != p1 && c != p2) { childAssignStamp[c] = currentAssignStamp; childIdOfVertex[c] = childId; }
-				foreach (var w in triAdj[u2])
-				{
-					if (triRemoved[w]) continue;
-					if (triVisitMark[w] == triVisitStamp) continue;
-					st.Push(w);
-				}
-			}
-		}
-
-		// Bucket queries to children in a single pass
-		var buckets = new List<int>[childCount];
-		for (int i = 0; i < childCount; i++) buckets[i] = new List<int>();
-		for (int i = 0; i < queryIndices.Count; i++)
-		{
-			int idx = queryIndices[i];
-			if (answer[idx] == 0) continue;
-			int s = qs[idx], t = qt[idx];
-			if (childAssignStamp[s] == currentAssignStamp && childAssignStamp[t] == currentAssignStamp)
-			{
-				int idS = childIdOfVertex[s];
-				if (idS == childIdOfVertex[t])
-				{
-					buckets[idS - 1].Add(idx);
-				}
-			}
-		}
-
-		// Recurse
-		for (int idxChild = 0; idxChild < childCount; idxChild++)
-		{
-			if (buckets[idxChild].Count == 0) continue;
-			Decompose(childRoots[idxChild], buckets[idxChild]);
-		}
-	}
-
-	static void RunBFSWithStamp(int src, int[] mark, ref int stamp, int[] dist)
+	static void RunBFS(int src, ref int stamp, int[] vis, int[] dist)
 	{
 		stamp++;
-		int head = 0, tail = 0;
-		mark[src] = stamp;
-		dist[src] = 0;
-		bfsQueue[tail++] = src;
-		while (head < tail)
+		int h = 0, t = 0; vis[src] = stamp; dist[src] = 0; qbuf[t++] = src;
+		while (h < t)
 		{
-			int u = bfsQueue[head++];
-			var adj = graph[u];
-			for (int j = 0; j < adj.Count; j++)
+			int u = qbuf[h++];
+			for (int e = headG[u]; e != -1; e = nextG[e])
 			{
-				int w = adj[j];
-				if (vertexMark[w] != vertexStamp) continue; // not in this component
-				if (mark[w] == stamp) continue;
-				mark[w] = stamp;
-				dist[w] = dist[u] + 1;
-				bfsQueue[tail++] = w;
+				int w = toG[e]; if (compMarkV[w] != compStampV) continue; if (vis[w] == stamp) continue; vis[w] = stamp; dist[w] = dist[u] + 1; qbuf[t++] = w;
 			}
 		}
 	}
