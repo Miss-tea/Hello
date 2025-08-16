@@ -1,0 +1,48 @@
+.class public final synthetic Lcom/sekai/bank/ui/send/SendMoneyFragment$$ExternalSyntheticLambda0;
+.super Ljava/lang/Object;
+.source "D8$$SyntheticClass"
+
+# interfaces
+.implements Landroid/view/View$OnClickListener;
+
+
+# instance fields
+.field public final synthetic f$0:Lcom/sekai/bank/ui/send/SendMoneyFragment;
+
+.field public final synthetic f$1:D
+
+.field public final synthetic f$2:Ljava/lang/String;
+
+
+# direct methods
+.method public synthetic constructor <init>(Lcom/sekai/bank/ui/send/SendMoneyFragment;DLjava/lang/String;)V
+    .locals 0
+
+    .line 0
+    invoke-direct {p0}, Ljava/lang/Object;-><init>()V
+
+    iput-object p1, p0, Lcom/sekai/bank/ui/send/SendMoneyFragment$$ExternalSyntheticLambda0;->f$0:Lcom/sekai/bank/ui/send/SendMoneyFragment;
+
+    iput-wide p2, p0, Lcom/sekai/bank/ui/send/SendMoneyFragment$$ExternalSyntheticLambda0;->f$1:D
+
+    iput-object p4, p0, Lcom/sekai/bank/ui/send/SendMoneyFragment$$ExternalSyntheticLambda0;->f$2:Ljava/lang/String;
+
+    return-void
+.end method
+
+
+# virtual methods
+.method public final onClick(Landroid/view/View;)V
+    .locals 4
+
+    .line 0
+    iget-object v0, p0, Lcom/sekai/bank/ui/send/SendMoneyFragment$$ExternalSyntheticLambda0;->f$0:Lcom/sekai/bank/ui/send/SendMoneyFragment;
+
+    iget-wide v1, p0, Lcom/sekai/bank/ui/send/SendMoneyFragment$$ExternalSyntheticLambda0;->f$1:D
+
+    iget-object v3, p0, Lcom/sekai/bank/ui/send/SendMoneyFragment$$ExternalSyntheticLambda0;->f$2:Ljava/lang/String;
+
+    invoke-virtual {v0, v1, v2, v3, p1}, Lcom/sekai/bank/ui/send/SendMoneyFragment;->lambda$showConfirmationDialog$6$com-sekai-bank-ui-send-SendMoneyFragment(DLjava/lang/String;Landroid/view/View;)V
+
+    return-void
+.end method

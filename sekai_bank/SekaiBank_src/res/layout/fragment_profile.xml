@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView android:layout_width="fill_parent" android:layout_height="fill_parent" android:fillViewport="true"
+  xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto">
+    <LinearLayout android:orientation="vertical" android:padding="16.0dip" android:layout_width="fill_parent" android:layout_height="wrap_content">
+        <LinearLayout android:gravity="center_vertical" android:orientation="horizontal" android:layout_width="fill_parent" android:layout_height="wrap_content" android:layout_marginBottom="24.0dip">
+            <TextView android:layout_width="0.0dip" android:layout_height="wrap_content" android:text="@string/profile_title" android:layout_weight="1.0" style="@style/SekaiText.Title" />
+        </LinearLayout>
+        <com.google.android.material.card.MaterialCardView android:layout_width="fill_parent" android:layout_height="wrap_content" android:layout_marginBottom="24.0dip" style="@style/SekaiCard">
+            <LinearLayout android:orientation="vertical" android:padding="24.0dip" android:layout_width="fill_parent" android:layout_height="wrap_content">
+                <LinearLayout android:gravity="center_vertical" android:orientation="horizontal" android:layout_width="fill_parent" android:layout_height="wrap_content" android:layout_marginBottom="16.0dip">
+                    <com.google.android.material.card.MaterialCardView android:layout_width="64.0dip" android:layout_height="64.0dip" android:layout_marginEnd="16.0dip" app:cardCornerRadius="32.0dip" app:cardElevation="4.0dip">
+                        <LinearLayout android:gravity="center" android:background="@drawable/gradient_primary" android:layout_width="fill_parent" android:layout_height="fill_parent">
+                            <TextView android:textSize="24.0sp" android:textStyle="bold" android:textColor="@android:color/white" android:id="@id/user_initial" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                        </LinearLayout>
+                    </com.google.android.material.card.MaterialCardView>
+                    <LinearLayout android:orientation="vertical" android:layout_width="0.0dip" android:layout_height="wrap_content" android:layout_weight="1.0">
+                        <TextView android:textSize="18.0sp" android:textStyle="bold" android:id="@id/username_text" android:layout_width="wrap_content" android:layout_height="wrap_content" style="@style/SekaiText" />
+                        <TextView android:id="@id/email_text" android:visibility="gone" android:layout_width="wrap_content" android:layout_height="wrap_content" style="@style/SekaiText.Subtitle" />
+                    </LinearLayout>
+                </LinearLayout>
+                <LinearLayout android:gravity="center" android:orientation="vertical" android:background="@drawable/gradient_secondary_rounded" android:padding="16.0dip" android:layout_width="fill_parent" android:layout_height="wrap_content">
+                    <TextView android:textSize="14.0sp" android:textColor="@android:color/white" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/current_balance" style="@style/SekaiText" />
+                    <TextView android:textSize="28.0sp" android:textStyle="bold" android:textColor="@android:color/white" android:id="@id/balance_text" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+        <TextView android:textStyle="bold" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginBottom="12.0dip" android:text="@string/account_actions" style="@style/SekaiText" />
+        <LinearLayout android:orientation="horizontal" android:layout_width="fill_parent" android:layout_height="wrap_content" android:layout_marginBottom="24.0dip">
+            <com.google.android.material.card.MaterialCardView android:id="@id/change_pin_card" android:layout_width="0.0dip" android:layout_height="wrap_content" android:layout_weight="1.0" android:layout_marginEnd="8.0dip" style="@style/SekaiCard.Clickable">
+                <LinearLayout android:gravity="center" android:orientation="vertical" android:padding="20.0dip" android:layout_width="fill_parent" android:layout_height="wrap_content">
+                    <TextView android:textSize="24.0sp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginBottom="8.0dip" android:text="🔐" />
+                    <TextView android:textStyle="bold" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/change_pin" android:textAlignment="center" style="@style/SekaiText" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+            <com.google.android.material.card.MaterialCardView android:id="@id/logout_card" android:layout_width="0.0dip" android:layout_height="wrap_content" android:layout_weight="1.0" android:layout_marginStart="8.0dip" style="@style/SekaiCard.Clickable">
+                <LinearLayout android:gravity="center" android:orientation="vertical" android:padding="20.0dip" android:layout_width="fill_parent" android:layout_height="wrap_content">
+                    <TextView android:textSize="24.0sp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginBottom="8.0dip" android:text="💢" />
+                    <TextView android:textStyle="bold" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/logout" android:textAlignment="center" style="@style/SekaiText" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+        </LinearLayout>
+        <TextView android:textStyle="bold" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginBottom="12.0dip" android:text="@string/settings" style="@style/SekaiText" />
+        <com.google.android.material.card.MaterialCardView android:layout_width="fill_parent" android:layout_height="wrap_content" style="@style/SekaiCard">
+            <LinearLayout android:orientation="vertical" android:layout_width="fill_parent" android:layout_height="wrap_content">
+                <LinearLayout android:gravity="center_vertical" android:orientation="horizontal" android:id="@id/settings_notifications" android:background="?android:selectableItemBackground" android:paddingLeft="16.0dip" android:paddingRight="16.0dip" android:layout_width="fill_parent" android:layout_height="56.0dip" android:paddingHorizontal="16.0dip">
+                    <TextView android:textSize="20.0sp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="🔔" android:layout_marginEnd="16.0dip" />
+                    <TextView android:layout_width="0.0dip" android:layout_height="wrap_content" android:text="@string/notifications" android:layout_weight="1.0" style="@style/SekaiText" />
+                    <TextView android:textColor="@color/text_secondary" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="›" />
+                </LinearLayout>
+                <View android:background="@color/divider" android:layout_width="fill_parent" android:layout_height="1.0dip" android:layout_marginLeft="16.0dip" android:layout_marginRight="16.0dip" android:layout_marginHorizontal="16.0dip" />
+                <LinearLayout android:gravity="center_vertical" android:orientation="horizontal" android:id="@id/settings_security" android:background="?android:selectableItemBackground" android:paddingLeft="16.0dip" android:paddingRight="16.0dip" android:layout_width="fill_parent" android:layout_height="56.0dip" android:paddingHorizontal="16.0dip">
+                    <TextView android:textSize="20.0sp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="🛡️" android:layout_marginEnd="16.0dip" />
+                    <TextView android:layout_width="0.0dip" android:layout_height="wrap_content" android:text="@string/security" android:layout_weight="1.0" style="@style/SekaiText" />
+                    <TextView android:textColor="@color/text_secondary" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="›" />
+                </LinearLayout>
+                <View android:background="@color/divider" android:layout_width="fill_parent" android:layout_height="1.0dip" android:layout_marginLeft="16.0dip" android:layout_marginRight="16.0dip" android:layout_marginHorizontal="16.0dip" />
+                <LinearLayout android:gravity="center_vertical" android:orientation="horizontal" android:id="@id/settings_support" android:background="?android:selectableItemBackground" android:paddingLeft="16.0dip" android:paddingRight="16.0dip" android:layout_width="fill_parent" android:layout_height="56.0dip" android:paddingHorizontal="16.0dip">
+                    <TextView android:textSize="20.0sp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="💬" android:layout_marginEnd="16.0dip" />
+                    <TextView android:layout_width="0.0dip" android:layout_height="wrap_content" android:text="@string/support" android:layout_weight="1.0" style="@style/SekaiText" />
+                    <TextView android:textColor="@color/text_secondary" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="›" />
+                </LinearLayout>
+                <View android:background="@color/divider" android:layout_width="fill_parent" android:layout_height="1.0dip" android:layout_marginLeft="16.0dip" android:layout_marginRight="16.0dip" android:layout_marginHorizontal="16.0dip" />
+                <LinearLayout android:gravity="center_vertical" android:orientation="horizontal" android:id="@id/settings_about" android:background="?android:selectableItemBackground" android:paddingLeft="16.0dip" android:paddingRight="16.0dip" android:layout_width="fill_parent" android:layout_height="56.0dip" android:paddingHorizontal="16.0dip">
+                    <TextView android:textSize="20.0sp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="ℹ️" android:layout_marginEnd="16.0dip" />
+                    <TextView android:layout_width="0.0dip" android:layout_height="wrap_content" android:text="@string/about" android:layout_weight="1.0" style="@style/SekaiText" />
+                    <TextView android:textColor="@color/text_secondary" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="›" />
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+        <ProgressBar android:layout_gravity="center" android:id="@id/progress_bar" android:visibility="gone" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="24.0dip" style="@style/SekaiProgressBar" />
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>

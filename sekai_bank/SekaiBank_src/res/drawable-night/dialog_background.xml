@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape android:shape="rectangle"
+  xmlns:android="http://schemas.android.com/apk/res/android">
+    <gradient android:startColor="@color/sekai_dark_blue" android:endColor="@color/sekai_light_blue" android:angle="135.0" />
+    <corners android:radius="24.0dip" />
+    <stroke android:width="1.0dip" android:color="@color/sekai_pink_primary" />
+    <padding android:left="24.0dip" android:top="20.0dip" android:right="24.0dip" android:bottom="20.0dip" />
+</shape>

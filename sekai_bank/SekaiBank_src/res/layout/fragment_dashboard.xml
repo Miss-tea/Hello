@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.swiperefreshlayout.widget.SwipeRefreshLayout android:id="@id/swipe_refresh_layout" android:layout_width="fill_parent" android:layout_height="fill_parent"
+  xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto">
+    <androidx.core.widget.NestedScrollView android:layout_width="fill_parent" android:layout_height="fill_parent" android:fillViewport="true">
+        <LinearLayout android:orientation="vertical" android:padding="16.0dip" android:layout_width="fill_parent" android:layout_height="wrap_content">
+            <TextView android:id="@id/welcome_text" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginBottom="24.0dip" android:text="@string/sekai_welcome_message" style="@style/SekaiText.Title" />
+            <com.google.android.material.card.MaterialCardView android:id="@id/balance_card" android:focusable="true" android:clickable="true" android:layout_width="fill_parent" android:layout_height="wrap_content" android:layout_marginBottom="24.0dip" android:foreground="?selectableItemBackground" style="@style/SekaiCard.Balance">
+                <LinearLayout android:gravity="center" android:orientation="vertical" android:padding="32.0dip" android:layout_width="fill_parent" android:layout_height="wrap_content">
+                    <TextView android:textSize="16.0sp" android:textColor="@color/text_on_primary" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginBottom="8.0dip" android:text="@string/account_balance" />
+                    <TextView android:id="@id/balance_text" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginBottom="8.0dip" style="@style/SekaiText.Balance" />
+                    <TextView android:textSize="12.0sp" android:textColor="@color/text_on_primary" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Tap to refresh" android:alpha="0.8" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+            <TextView android:textSize="18.0sp" android:textStyle="bold" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="16.0dip" android:layout_marginBottom="16.0dip" android:text="@string/quick_actions" style="@style/SekaiText" />
+            <LinearLayout android:orientation="horizontal" android:layout_width="fill_parent" android:layout_height="wrap_content" android:layout_marginBottom="32.0dip">
+                <com.google.android.material.card.MaterialCardView android:id="@id/send_money_card" android:focusable="true" android:clickable="true" android:layout_width="0.0dip" android:layout_height="120.0dip" android:foreground="?selectableItemBackground" android:layout_weight="1.0" android:layout_marginEnd="8.0dip" style="@style/SekaiCard">
+                    <LinearLayout android:gravity="center" android:orientation="vertical" android:padding="16.0dip" android:layout_width="fill_parent" android:layout_height="fill_parent">
+                        <androidx.appcompat.widget.AppCompatImageView android:layout_width="32.0dip" android:layout_height="32.0dip" android:layout_marginBottom="8.0dip" android:src="@drawable/ic_send" app:tint="@color/sekai_pink_primary" />
+                        <TextView android:textStyle="bold" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/send_money" android:textAlignment="center" style="@style/SekaiText" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+                <com.google.android.material.card.MaterialCardView android:id="@id/receive_money_card" android:focusable="true" android:clickable="true" android:layout_width="0.0dip" android:layout_height="120.0dip" android:foreground="?selectableItemBackground" android:layout_weight="1.0" android:layout_marginStart="8.0dip" style="@style/SekaiCard">
+                    <LinearLayout android:gravity="center" android:orientation="vertical" android:padding="16.0dip" android:layout_width="fill_parent" android:layout_height="fill_parent">
+                        <androidx.appcompat.widget.AppCompatImageView android:layout_width="32.0dip" android:layout_height="32.0dip" android:layout_marginBottom="8.0dip" android:src="@drawable/ic_money" app:tint="@color/sekai_green_primary" />
+                        <TextView android:textStyle="bold" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/receive_money" android:textAlignment="center" style="@style/SekaiText" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+            </LinearLayout>
+            <LinearLayout android:gravity="center_vertical" android:orientation="horizontal" android:layout_width="fill_parent" android:layout_height="wrap_content" android:layout_marginBottom="16.0dip">
+                <TextView android:textSize="18.0sp" android:textStyle="bold" android:layout_width="0.0dip" android:layout_height="wrap_content" android:text="@string/recent_transactions" android:layout_weight="1.0" style="@style/SekaiText" />
+                <Button android:textSize="12.0sp" android:id="@id/view_all_transactions_button" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/view_all_transactions" android:paddingStart="16.0dip" android:paddingEnd="16.0dip" style="@style/SekaiButton.Outlined" />
+            </LinearLayout>
+            <com.google.android.material.card.MaterialCardView android:layout_width="fill_parent" android:layout_height="wrap_content" style="@style/SekaiCard">
+                <LinearLayout android:orientation="vertical" android:padding="16.0dip" android:layout_width="fill_parent" android:layout_height="wrap_content">
+                    <com.facebook.shimmer.ShimmerFrameLayout android:id="@id/transactions_shimmer" android:visibility="gone" android:layout_width="fill_parent" android:layout_height="200.0dip" app:shimmer_auto_start="true" app:shimmer_base_color="@color/shimmer_base" app:shimmer_direction="left_to_right" app:shimmer_duration="1000" app:shimmer_highlight_color="@color/shimmer_highlight" app:shimmer_shape="linear">
+                        <LinearLayout android:orientation="vertical" android:layout_width="fill_parent" android:layout_height="fill_parent">
+                            <View android:background="@color/shimmer_placeholder" android:layout_width="fill_parent" android:layout_height="48.0dip" android:layout_marginBottom="8.0dip" android:alpha="0.3" />
+                            <View android:background="@color/shimmer_placeholder" android:layout_width="fill_parent" android:layout_height="48.0dip" android:layout_marginBottom="8.0dip" android:alpha="0.3" />
+                            <View android:background="@color/shimmer_placeholder" android:layout_width="fill_parent" android:layout_height="48.0dip" android:alpha="0.3" />
+                        </LinearLayout>
+                    </com.facebook.shimmer.ShimmerFrameLayout>
+                    <androidx.recyclerview.widget.RecyclerView android:id="@id/recent_transactions_recycler_view" android:layout_width="fill_parent" android:layout_height="wrap_content" android:nestedScrollingEnabled="false" />
+                    <TextView android:gravity="center" android:id="@id/no_transactions_text" android:visibility="gone" android:layout_width="fill_parent" android:layout_height="120.0dip" android:text="@string/no_transactions" style="@style/SekaiText.Subtitle" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+</androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
