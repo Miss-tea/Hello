@@ -32,6 +32,7 @@ public class Program
 	static bool[] removed;
 	static int[] compMarkT; static int compStampT;
 	static int[] parentT; static int[] sizeT; static int[] orderT;
+	static int[] stackT; // custom stack for tree traversals
 	
 	static int[] compMarkV; static int compStampV;
 	
@@ -44,6 +45,7 @@ public class Program
 	
 	// queries
 	static int[] sQ, tQ, ansQ;
+	static int[] globalQueryIndexBuf; // scratch buffer for bucketing queries
 
 	public static void Main()
 	{
@@ -84,39 +86,39 @@ public class Program
 		for (int i = 0; i < q; i++) { int s = fs.NextInt(), t = fs.NextInt(); sQ[i] = s; tQ[i] = t; ansQ[i] = (s == t) ? 0 : int.MaxValue / 4; }
 
 		removed = new bool[n + 1];
-		compMarkT = new int[n + 1]; parentT = new int[n + 1]; sizeT = new int[n + 1]; orderT = new int[n + 1];
+		compMarkT = new int[n + 1]; parentT = new int[n + 1]; sizeT = new int[n + 1]; orderT = new int[n + 1]; stackT = new int[n + 5];
 		compMarkV = new int[n + 1];
 		dist0 = new int[n + 1]; dist1 = new int[n + 1]; dist2 = new int[n + 1];
 		vis0 = new int[n + 1]; vis1 = new int[n + 1]; vis2 = new int[n + 1];
 		qbuf = new int[n + 5];
 		assignStamp = new int[n + 1]; assignId = new int[n + 1];
 		visitT = new int[n + 1];
+		globalQueryIndexBuf = new int[Math.Max(1, q)];
 
-		var all = new System.Collections.Generic.List<int>(q);
-		for (int i = 0; i < q; i++) all.Add(i);
-		Decompose(3, all);
+		// seed queries array 0..q-1
+		for (int i = 0; i < q; i++) globalQueryIndexBuf[i] = i;
+		DecomposeArray(3, globalQueryIndexBuf, 0, q);
 
 		var sb = new StringBuilder();
 		for (int i = 0; i < q; i++) sb.AppendLine(ansQ[i].ToString());
 		Console.Write(sb.ToString());
 	}
 
-	static void Decompose(int startT, System.Collections.Generic.List<int> queries)
+	static void DecomposeArray(int startT, int[] queries, int qStart, int qLen)
 	{
-		if (queries.Count == 0) return;
+		if (qLen == 0) return;
 		// collect component triangles via stack ignoring removed
 		compStampT++;
 		int top = 0; // order length
-		var st = new System.Collections.Generic.Stack<int>();
-		st.Push(startT); compMarkT[startT] = compStampT; parentT[startT] = -1;
-		while (st.Count > 0)
+		int sp = 0; stackT[sp++] = startT; compMarkT[startT] = compStampT; parentT[startT] = -1;
+		while (sp > 0)
 		{
-			int u = st.Pop();
+			int u = stackT[--sp];
 			orderT[top++] = u;
 			for (int e = headT[u]; e != -1; e = nextT[e])
 			{
 				int w = toT[e]; if (removed[w] || compMarkT[w] == compStampT) continue;
-				compMarkT[w] = compStampT; parentT[w] = u; st.Push(w);
+				compMarkT[w] = compStampT; parentT[w] = u; stackT[sp++] = w;
 			}
 		}
 		if (top == 0) return;
@@ -147,9 +149,9 @@ public class Program
 		RunBFS(port[2], ref stamp2, vis2, dist2);
 
 		// process queries crossing via centroid (constant-time per query)
-		for (int i = 0; i < queries.Count; i++)
+		for (int ii = 0; ii < qLen; ii++)
 		{
-			int id = queries[i]; if (ansQ[id] == 0) continue; int s = sQ[id], t = tQ[id];
+			int id = queries[qStart + ii]; if (ansQ[id] == 0) continue; int s = sQ[id], t = tQ[id];
 			if (compMarkV[s] != compStampV || compMarkV[t] != compStampV) continue;
 			int bestAns = ansQ[id];
 			int a = (vis0[s] == stamp0 && vis0[t] == stamp0) ? dist0[s] + dist0[t] : int.MaxValue;
@@ -162,7 +164,6 @@ public class Program
 			int b0 = (vis0[t] == stamp0) ? dist0[t] : int.MaxValue;
 			int b1 = (vis1[t] == stamp1) ? dist1[t] : int.MaxValue;
 			int b2 = (vis2[t] == stamp2) ? dist2[t] : int.MaxValue;
-			// cross via different portal (+1 inside centroid triangle)
 			if (a0 < int.MaxValue && b1 < int.MaxValue && a0 + b1 + 1 < bestAns) bestAns = a0 + b1 + 1;
 			if (a0 < int.MaxValue && b2 < int.MaxValue && a0 + b2 + 1 < bestAns) bestAns = a0 + b2 + 1;
 			if (a1 < int.MaxValue && b0 < int.MaxValue && a1 + b0 + 1 < bestAns) bestAns = a1 + b0 + 1;
@@ -175,37 +176,61 @@ public class Program
 		// gather children and assign vertices -> child id
 		removed[centroid] = true;
 		int deg = 0; for (int e = headT[centroid]; e != -1; e = nextT[e]) { int w = toT[e]; if (!removed[w] && compMarkT[w] == compStampT) deg++; }
-		var childRoots = new int[deg]; int pos = 0; for (int e = headT[centroid]; e != -1; e = nextT[e]) { int w = toT[e]; if (!removed[w] && compMarkT[w] == compStampT) childRoots[pos++] = w; }
+		int[] childRoots = new int[deg]; int pos = 0; for (int e = headT[centroid]; e != -1; e = nextT[e]) { int w = toT[e]; if (!removed[w] && compMarkT[w] == compStampT) childRoots[pos++] = w; }
 		assignStampCur++;
 		int p0 = port[0], p1 = port[1], p2 = port[2];
 		for (int i = 0; i < childRoots.Length; i++)
 		{
 			int root = childRoots[i]; int idc = i + 1;
 			visitTStamp++;
-			var s = new System.Collections.Generic.Stack<int>(); s.Push(root); visitT[centroid] = visitTStamp;
-			while (s.Count > 0)
+			int stp = 0; stackT[stp++] = root; visitT[centroid] = visitTStamp;
+			while (stp > 0)
 			{
-				int u = s.Pop(); if (visitT[u] == visitTStamp) continue; visitT[u] = visitTStamp;
+				int u = stackT[--stp]; if (visitT[u] == visitTStamp) continue; visitT[u] = visitTStamp;
 				var tv = tri[u];
 				int a = tv[0], b2 = tv[1], c2 = tv[2];
 				if (a != p0 && a != p1 && a != p2) { assignStamp[a] = assignStampCur; assignId[a] = idc; }
 				if (b2 != p0 && b2 != p1 && b2 != p2) { assignStamp[b2] = assignStampCur; assignId[b2] = idc; }
 				if (c2 != p0 && c2 != p1 && c2 != p2) { assignStamp[c2] = assignStampCur; assignId[c2] = idc; }
-				for (int e = headT[u]; e != -1; e = nextT[e]) { int w = toT[e]; if (removed[w]) continue; if (visitT[w] == visitTStamp) continue; s.Push(w); }
+				for (int e = headT[u]; e != -1; e = nextT[e]) { int w = toT[e]; if (removed[w]) continue; if (visitT[w] == visitTStamp) continue; stackT[stp++] = w; }
 			}
 		}
 
-		// bucket queries
-		var buckets = new System.Collections.Generic.List<int>[childRoots.Length]; for (int i = 0; i < buckets.Length; i++) buckets[i] = new System.Collections.Generic.List<int>();
-		for (int i = 0; i < queries.Count; i++)
+		// bucket queries for children in a single pass using contiguous buffer
+		int m = childRoots.Length;
+		if (m > 0)
 		{
-			int id = queries[i]; if (ansQ[id] == 0) continue; int s = sQ[id], t = tQ[id];
-			if (assignStamp[s] == assignStampCur && assignStamp[t] == assignStampCur)
+			int[] cnt = new int[m];
+			for (int ii = 0; ii < qLen; ii++)
 			{
-				int ids = assignId[s], idt = assignId[t]; if (ids == idt) buckets[ids - 1].Add(id);
+				int id = queries[qStart + ii]; if (ansQ[id] == 0) continue; int s = sQ[id], t = tQ[id];
+				if (assignStamp[s] == assignStampCur && assignStamp[t] == assignStampCur)
+				{
+					int isid = assignId[s]; if (isid == assignId[t]) cnt[isid - 1]++;
+				}
+			}
+			int[] start = new int[m]; int[] posArr = new int[m];
+			int totalCnt = 0; for (int i = 0; i < m; i++) { start[i] = totalCnt; posArr[i] = totalCnt; totalCnt += cnt[i]; }
+			if (globalQueryIndexBuf.Length < totalCnt) globalQueryIndexBuf = new int[Math.Max(globalQueryIndexBuf.Length * 2, totalCnt)];
+			for (int ii = 0; ii < qLen; ii++)
+			{
+				int id = queries[qStart + ii]; if (ansQ[id] == 0) continue; int s = sQ[id], t = tQ[id];
+				if (assignStamp[s] == assignStampCur && assignStamp[t] == assignStampCur)
+				{
+					int isid = assignId[s], itid = assignId[t]; if (isid == itid)
+					{
+						int p = posArr[isid - 1]++;
+						globalQueryIndexBuf[p] = id;
+					}
+				}
+			}
+			for (int i = 0; i < m; i++)
+			{
+				int lenChild = cnt[i]; if (lenChild == 0) continue;
+				int startIdx = start[i];
+				DecomposeArray(childRoots[i], globalQueryIndexBuf, startIdx, lenChild);
 			}
 		}
-		for (int i = 0; i < childRoots.Length; i++) if (buckets[i].Count > 0) Decompose(childRoots[i], buckets[i]);
 	}
 
 	static void RunBFS(int src, ref int stamp, int[] vis, int[] dist)
